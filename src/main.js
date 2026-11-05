@@ -21,6 +21,7 @@ const groups = [
 ];
 const grid=document.querySelector('#service-grid');
 grid.innerHTML=groups.map((g,i)=>`<article class="service-card" data-group="${i}"><div class="card-top"><svg viewBox="0 0 32 32" aria-hidden="true" class="service-icon">${icons[g.icon]}</svg><span class="card-number">0${i+1}</span></div><h3>${g.name}</h3><select aria-label="Выбрать работу: ${g.name}" data-select="${i}">${g.items.map((x,j)=>`<option value="${j}">${x[0]}</option>`).join('')}</select><p class="service-unit">${g.items[0][2]}</p><div class="card-bottom"><span class="card-price">от <b>${g.items[0][1]}</b> BYN</span><button class="add-service" data-add="${i}" aria-label="Добавить: ${g.items[0][0]}">В расчёт <span>+</span></button></div></article>`).join('');
+let bookingDraft = null;
 let cart=[];
 try{const saved=JSON.parse(localStorage.getItem('remont-cart-v1')||'[]');if(Array.isArray(saved))cart=saved.filter(x=>Number.isInteger(x.g)&&Number.isInteger(x.i)&&groups[x.g]?.items[x.i]&&Number.isInteger(x.qty)&&x.qty>0&&x.qty<=99).filter((x,i,a)=>a.findIndex(y=>y.g===x.g&&y.i===x.i)===i).map(({g,i,qty})=>({g,i,qty}));}catch{}
 const money=n=>new Intl.NumberFormat('ru-BY',{maximumFractionDigits:0}).format(n);
@@ -32,6 +33,8 @@ function render(){
  document.querySelector('#total').innerHTML=`${cart.length?'от ':''}${money(total())} <small>BYN</small>`;
  document.querySelector('#count-label').textContent=`${cart.length} ${noun(cart.length)}`;
  document.querySelector('#clear-cart').hidden=!cart.length;
+ document.querySelector('#dock-count').textContent=cart.length;
+ document.querySelector('#dock-total').textContent=(cart.length?'от ':'')+money(total())+' BYN';
  grid.querySelectorAll('.service-card').forEach((c,i)=>c.classList.toggle('is-selected',cart.some(x=>x.g===i)));
  try{localStorage.setItem('remont-cart-v1',JSON.stringify(cart));}catch{}
 }
@@ -44,8 +47,53 @@ document.querySelector('#cart').addEventListener('change',e=>{if(!e.target.match
 document.querySelector('#clear-cart').addEventListener('click',()=>{cart=[];render();toast('Расчёт очищен')});
 document.querySelector('#season-add').addEventListener('click',()=>{document.querySelector('#services').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});const s=document.querySelector('[data-select="2"]');s.focus({preventScroll:true});s.closest('article').animate([{boxShadow:'0 0 0 4px #b9eb62'},{boxShadow:'0 0 0 0px transparent'}],{duration:1500})});
 const dialog=document.querySelector('#booking-dialog');
-function summary(){return cart.length?`Здравствуйте! Хочу согласовать работы и время визита:\n\n${cart.map(x=>{const item=groups[x.g].items[x.i];return `${item[0]} — ${x.qty} × от ${item[1]} BYN = от ${item[1]*x.qty} BYN\n(${item[2]})`}).join('\n\n')}\n\nПредварительный подытог: от ${total()} BYN.\nТолько работа, без запчастей и расходников.\nАвтомобиль: [марка, модель, год]\nУдобное время: [дата и время]`:'Здравствуйте! Хочу записаться на СТО.\nАвтомобиль: [марка, модель, год]\nНужные работы: [опишите задачу]\nУдобное время: [дата и время]';}
-document.querySelector('#booking-button').addEventListener('click',()=>{document.querySelector('#booking-summary').textContent=summary();document.querySelector('#copy-status').textContent='';dialog.showModal()});
+function calcSummary(){return cart.length?`Здравствуйте! Хочу согласовать работы и время визита:\n\n${cart.map(x=>{const item=groups[x.g].items[x.i];return `${item[0]} — ${x.qty} × от ${item[1]} BYN = от ${item[1]*x.qty} BYN\n(${item[2]})`}).join('\n\n')}\n\nПредварительный подытог: от ${total()} BYN.\nТолько работа, без запчастей и расходников.\nАвтомобиль: [марка, модель, год]\nУдобное время: [дата и время]`:'Здравствуйте! Хочу записаться на СТО.\nАвтомобиль: [марка, модель, год]\nНужные работы: [опишите задачу]\nУдобное время: [дата и время]';}
+function summary(){
+ const base=bookingDraft || calcSummary().replace('[марка, модель, год]', document.querySelector('#calc-model').value.trim() || '[марка, модель, год]');
+ const date=document.querySelector('#visit-date').value;
+ const time=document.querySelector('#visit-time').value;
+ return base + (date||time ? `\n\nЖелаемая дата: ${date || 'уточнить'}\nЖелаемое время: ${time || 'уточнить'}\nПрошу подтвердить свободное время.` : '');
+}
+document.querySelector('#booking-button').addEventListener('click',()=>{bookingDraft=null;document.querySelector('#booking-summary').textContent=summary();document.querySelector('#copy-status').textContent='';dialog.showModal()});
 document.querySelector('.dialog-close').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close()}});
 document.querySelector('#copy-summary').addEventListener('click',async()=>{const status=document.querySelector('#copy-status');try{await navigator.clipboard.writeText(summary());status.textContent='Скопировано. Отправьте расчёт мастеру в Telegram.'}catch{const r=document.createRange();r.selectNodeContents(document.querySelector('#booking-summary'));const selection=window.getSelection();selection.removeAllRanges();selection.addRange(r);status.textContent='Выделили текст. Скопируйте его вручную.'}});
 const menu=document.querySelector('.menu-toggle');const nav=document.querySelector('nav');menu.addEventListener('click',()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',open);menu.setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');menu.textContent=open?'×':'☰'});nav.addEventListener('click',()=>{nav.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰'});render();
+const search=document.querySelector('#service-search');
+const normalize=s=>s.toLowerCase().replaceAll('ё','е').replaceAll('масла','масло').replaceAll('колодок','колодки');
+function filterServices(){
+ const query=normalize(search.value.trim());let found=0;
+ grid.querySelectorAll('.service-card').forEach((card,g)=>{
+  const categoryMatch=normalize(groups[g].name).includes(query);
+  const matches=groups[g].items.map((item,i)=>({item,i})).filter(({item})=>categoryMatch||normalize(item.join(' ')).includes(query));
+  card.hidden=matches.length===0;found+=matches.length;
+  const select=card.querySelector('select');
+  [...select.options].forEach(o=>o.hidden=!matches.some(x=>x.i===Number(o.value)));
+  if(matches.length&&!matches.some(x=>x.i===+select.value)){select.value=matches[0].i;select.dispatchEvent(new Event('change',{bubbles:true}));}
+ });
+ document.querySelector('#search-count').textContent=query?`Найдено: ${found}`:'';
+ document.querySelector('#no-results').hidden=found>0;
+}
+search.addEventListener('input',filterServices);
+document.querySelectorAll('[data-preset]').forEach(button=>button.addEventListener('click',()=>{
+ search.value='';filterServices();
+ const preset=button.dataset.preset;
+ if(preset==='tyres'){
+  const select=document.querySelector('[data-select="2"]');select.focus({preventScroll:true});select.closest('article').scrollIntoView({block:'center',behavior:'smooth'});toast('Выберите размер колёс и добавьте комплекс в расчёт');return;
+ }
+ const [g,i]=({maintenance:[1,0],suspension:[0,1],check:[0,0]})[preset];
+ const select=document.querySelector(`[data-select="${g}"]`);select.value=i;select.dispatchEvent(new Event('change',{bubbles:true}));
+ if(!cart.some(x=>x.g===g&&x.i===i))cart.push({g,i,qty:1});
+ render();toast('В расчёт добавлено: '+groups[g].items[i][0]);
+}));
+document.querySelector('#quick-book').addEventListener('submit',event=>{
+ event.preventDefault();const form=event.currentTarget;
+ if(!form.reportValidity())return;
+ const data=new FormData(form);
+ bookingDraft=`Здравствуйте! Хочу записаться на СТО.\n\nАвтомобиль: ${data.get('make')}, ${data.get('model').trim()}\nРаботы: ${data.get('task').trim()}\n\nПодскажите стоимость и доступное время визита.`;
+ document.querySelector('#booking-summary').textContent=summary();document.querySelector('#copy-status').textContent='';dialog.showModal();
+});
+document.querySelector('#dock-cart').addEventListener('click',()=>{document.querySelector('.calculator').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});});
+
+const visitDate=document.querySelector('#visit-date');
+visitDate.min=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+for(const id of ['#visit-date','#visit-time'])document.querySelector(id).addEventListener('change',()=>{document.querySelector('#booking-summary').textContent=summary();document.querySelector('#copy-status').textContent='';});
