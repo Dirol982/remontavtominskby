@@ -97,3 +97,15 @@ document.querySelector('#dock-cart').addEventListener('click',()=>{document.quer
 const visitDate=document.querySelector('#visit-date');
 visitDate.min=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 for(const id of ['#visit-date','#visit-time'])document.querySelector(id).addEventListener('change',()=>{document.querySelector('#booking-summary').textContent=summary();document.querySelector('#copy-status').textContent='';});
+
+const themeButton=document.querySelector('.theme-toggle');
+const sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>';
+const moon='<path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z"/>';
+function syncThemeButton(){
+ const light=document.documentElement.dataset.theme==='light';
+ const label=light?'Включить тёмную тему':'Включить светлую тему';
+ themeButton.setAttribute('aria-label',label);themeButton.title=label;themeButton.setAttribute('aria-pressed',String(light));themeButton.querySelector('svg').innerHTML=light?moon:sun;
+}
+themeButton.addEventListener('click',()=>{const next=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=next;try{localStorage.setItem('remont-theme',next)}catch{}syncThemeButton()});
+window.addEventListener('storage',e=>{if(e.key==='remont-theme'){document.documentElement.dataset.theme=e.newValue==='light'?'light':'dark';syncThemeButton()}});
+syncThemeButton();
